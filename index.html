@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Заказ печати</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--tg-theme-bg-color); color: var(--tg-theme-text-color); padding: 15px; margin: 0; }
+        .block { background: var(--tg-theme-secondary-bg-color); margin-bottom: 12px; padding: 15px; border-radius: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 14px; }
+        select, input { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px; background: var(--tg-theme-bg-color); color: var(--tg-theme-text-color); }
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tabs button { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #eee; cursor: pointer; }
+        .tabs button.active { background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); }
+        .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .checkbox-item { display: flex; align-items: center; font-size: 13px; }
+        .checkbox-item input { width: auto; margin-right: 8px; margin-bottom: 0; }
+        .size-row { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 8px; margin-bottom: 10px; }
+        .btn-add { background: none; border: 1px dashed var(--tg-theme-button-color); color: var(--tg-theme-button-color); padding: 10px; width: 100%; border-radius: 8px; }
+        .info { font-size: 12px; color: #777; margin-top: 5px; }
+        #history_list .order-card { border-bottom: 1px solid #ccc; padding: 10px 0; font-size: 14px; }
+        #reg_screen { text-align: center; padding-top: 50px; }
+    </style>
+</head>
+<body>
+
+<div id="reg_screen" style="display:none;">
+    <div class="block">
+        <h3>Регистрация</h3>
+        <label>Название организации:</label>
+        <input type="text" id="company_name" placeholder="Например: Реклама Лимон">
+        <button onclick="register()" style="width:100%; padding:15px; border-radius:10px; background:var(--tg-theme-button-color); color:white; border:none; font-weight:bold;">Войти</button>
+    </div>
+</div>
+
+<div id="main_screen" style="display:none;">
+    <div class="tabs">
+        <button id="tab_new" class="active" onclick="switchTab('new')">Новый заказ</button>
+        <button id="tab_history" onclick="switchTab('history')">Мои заказы</button>
+    </div>
+
+    <div id="content_new">
+        <div class="block">
+            <label>Материал:</label>
+            <select id="material" onchange="validateForm()">
+                <option value="Печатная пленка">Печатная пленка</option>
+                <option value="Полипропилен">Полипропилен</option>
+                <option value="Бэклит">Бэклит</option>
+                <option value="Перфорация (OWV)">Перфорация (OWV)</option>
+                <option value="Баннерная сетка">Баннерная сетка</option>
+                <option value="Баннер">Баннер</option>
+                <option value="Мелованная бумага">Мелованная бумага</option>
+                <option value="Плоттерная резка">Плоттерная резка</option>
+            </select>
+        </div>
+
+        <div class="block">
+            <label>Опции:</label>
+            <div class="checkbox-group">
+                <div class="checkbox-item"><input type="checkbox" id="opt_lam" onchange="validateForm()"> Ламинация</div>
+                <div class="checkbox-item"><input type="checkbox" id="opt_pvc" onchange="validateForm()"> Накатка ПВХ</div>
+                <div class="checkbox-item"><input type="checkbox" id="opt_luv" onchange="validateForm()"> Люверсы</div>
+                <div class="checkbox-item"><input type="checkbox" id="opt_cut" onchange="validateForm()"> Плотт. резка</div>
+                <div class="checkbox-item"><input type="checkbox" id="opt_trim" onchange="validateForm()"> Обрезка</div>
+                <div class="checkbox-item"><input type="checkbox" id="opt_zap" onchange="validateForm()"> Запасы</div>
+            </div>
+            <div id="reska_source" style="display:none; margin-top:10px;">
+                <select id="reska_type"><option value="На нашем">На нашем материале</option><option value="Свой">Свой материал</option></select>
+            </div>
+        </div>
+
+        <div class="block">
+            <label>Размеры (мм):</label>
+            <div id="sizes_container">
+                <div class="size-row">
+                    <input type="number" placeholder="Ш" class="w" oninput="validateForm()">
+                    <input type="number" placeholder="В" class="h" oninput="validateForm()">
+                    <input type="number" placeholder="Шт" class="q" oninput="validateForm()">
+                    <div></div>
+                </div>
+            </div>
+            <button class="btn-add" onclick="addSizeRow()">+ Добавить размер</button>
+        </div>
+
+        <div class="block">
+            <label>Срочность:</label>
+            <select id="urgency"><option value="Стандарт">Стандарт (завтра)</option><option value="СРОЧНО">СРОЧНО (сегодня)</option></select>
+            <label>Макет выбран:</label>
+            <input type="file" id="file_check" onchange="validateForm()">
+        </div>
+    </div>
+
+    <div id="content_history" style="display:none;">
+        <div class="block" id="history_list">Загрузка...</div>
+    </div>
+</div>
+
+<script>
+    let tg = window.Telegram.WebApp;
+    // ССЫЛКА НА ВАШ GOOGLE СКРИПТ
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwZLlDE8OCg-pbZX_mH-wAD3uJgg4poySPWYv-KP4-e5qlni7f_dokI3wj6skTHHgDyaw/exec';
+    
+    tg.expand();
+    tg.MainButton.setText("ОФОРМИТЬ ЗАКАЗ");
+    tg.onEvent('mainButtonClicked', sendOrder);
+
+    // Проверка регистрации при загрузке
+    window.onload = () => {
+        if (localStorage.getItem('company_name')) {
+            showMain();
+        } else {
+            document.getElementById('reg_screen').style.display = 'block';
+        }
+    };
+
+    function register() {
+        const name = document.getElementById('company_name').value;
+        if (name.length < 2) return tg.showAlert("Введите название компании");
+        localStorage.setItem('company_name', name);
+        
+        // Регистрация в таблице
+        fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify({ 
+                type: "registration", 
+                chatId: tg.initDataUnsafe.user.id, 
+                company: name, 
+                username: "@" + (tg.initDataUnsafe.user.username || "unknown") 
+            }) 
+        });
+        showMain();
+    }
+
+    function showMain() {
+        document.getElementById('reg_screen').style.display = 'none';
+        document.getElementById('main_screen').style.display = 'block';
+        validateForm();
+    }
+
+    function switchTab(tab) {
+        document.getElementById('content_new').style.display = tab === 'new' ? 'block' : 'none';
+        document.getElementById('content_history').style.display = tab === 'history' ? 'block' : 'none';
+        document.getElementById('tab_new').className = tab === 'new' ? 'active' : '';
+        document.getElementById('tab_history').className = tab === 'history' ? 'active' : '';
+        if (tab === 'history') {
+            loadHistory();
+        } else {
+            validateForm();
+        }
+    }
+
+    function addSizeRow() {
+        const row = document.createElement('div');
+        row.className = 'size-row';
+        row.innerHTML = `
+            <input type="number" placeholder="Ш" class="w" oninput="validateForm()">
+            <input type="number" placeholder="В" class="h" oninput="validateForm()">
+            <input type="number" placeholder="Шт" class="q" oninput="validateForm()">
+            <button onclick="this.parentElement.remove();validateForm()" style="color:red;background:none;border:none;">✕</button>
+        `;
+        document.getElementById('sizes_container').appendChild(row);
+        validateForm();
+    }
+
+    function validateForm() {
+        // Если мы в истории — кнопку скрываем
+        if (document.getElementById('content_new').style.display === 'none') {
+            tg.MainButton.hide();
+            return;
+        }
+
+        const mat = document.getElementById('material').value;
+        document.getElementById('reska_source').style.display = (mat === 'Плоттерная резка') ? 'block' : 'none';
+        
+        // Проверка заполнения первого ряда
+        const w = document.querySelector('.w').value;
+        const h = document.querySelector('.h').value;
+        const q = document.querySelector('.q').value;
+        const hasFile = document.getElementById('file_check').files.length > 0;
+        
+        if (w > 0 && h > 0 && q > 0 && hasFile) {
+            tg.MainButton.show();
+        } else {
+            tg.MainButton.hide();
+        }
+    }
+
+    function sendOrder() {
+        tg.MainButton.showProgress();
+        const items = [];
+        document.querySelectorAll('.size-row').forEach(row => {
+            const w = row.querySelector('.w').value;
+            const h = row.querySelector('.h').value;
+            const q = row.querySelector('.q').value;
+            if (w > 0 && h > 0) {
+                items.push({ 
+                    size: w + "х" + h + " мм", 
+                    count: q, 
+                    totalArea: ((w * h / 1000000) * q).toFixed(3) + " м2" 
+                });
+            }
+        });
+
+        const opts = [];
+        if(document.getElementById('opt_lam').checked) opts.push("Лам");
+        if(document.getElementById('opt_pvc').checked) opts.push("ПВХ");
+        if(document.getElementById('opt_luv').checked) opts.push("Люверсы");
+        if(document.getElementById('opt_cut').checked) opts.push("Резка");
+        if(document.getElementById('opt_trim').checked) opts.push("Обрезка");
+
+        const data = {
+            type: "order", 
+            orderId: "#" + Math.floor(Math.random()*10000), 
+            client: localStorage.getItem('company_name'),
+            username: "@" + (tg.initDataUnsafe.user.username || "unknown"), 
+            material: document.getElementById('material').value,
+            options: opts.join(", "), 
+            urgency: document.getElementById('urgency').value, 
+            items: items
+        };
+
+        fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) })
+        .then(() => { 
+            tg.MainButton.hideProgress();
+            tg.showAlert("Заказ успешно отправлен!"); 
+            tg.close(); 
+        }).catch(() => {
+            tg.MainButton.hideProgress();
+            tg.showAlert("Ошибка отправки заказа!");
+        });
+    }
+
+    function loadHistory() {
+        const company = localStorage.getItem('company_name');
+        const list = document.getElementById('history_list');
+        list.innerHTML = "Загрузка...";
+        
+        fetch(`${SCRIPT_URL}?type=getHistory&company=${encodeURIComponent(company)}`)
+        .then(res => res.json())
+        .then(data => {
+            list.innerHTML = data.length ? data.map(o => `
+                <div class="order-card">
+                    <b>Заказ ${o.id}</b> - ${o.material}<br>
+                    <small>${o.date}</small> | <b style="color:var(--tg-theme-button-color)">${o.status}</b>
+                </div>
+            `).join('') : 'История заказов пуста';
+        }).catch(() => {
+            list.innerHTML = "Ошибка загрузки данных.";
+        });
+    }
+</script>
+</body>
+</html>
