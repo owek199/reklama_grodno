@@ -237,7 +237,8 @@
         const list = document.getElementById('history_list');
         list.innerHTML = "Загрузка...";
         
-        fetch(`${SCRIPT_URL}?type=getHistory&company=${encodeURIComponent(company)}`)
+        const chatId = tg.initDataUnsafe.user.id;
+fetch(`${SCRIPT_URL}?type=getHistory&chatId=${chatId}`)
         .then(res => res.json())
         .then(data => {
             list.innerHTML = data.length ? data.map(o => `
