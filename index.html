@@ -211,15 +211,17 @@
         if(document.getElementById('opt_trim').checked) opts.push("Обрезка");
 
         const data = {
-            type: "order", 
-            orderId: "#" + Math.floor(Math.random()*10000), 
-            client: localStorage.getItem('company_name'),
-            username: "@" + (tg.initDataUnsafe.user.username || "unknown"), 
-            material: document.getElementById('material').value,
-            options: opts.join(", "), 
-            urgency: document.getElementById('urgency').value, 
-            items: items
-        };
+        type: "order",
+        orderId: "#" + Math.floor(Math.random() * 10000),
+        // ЭТОТ ПУНКТ КРИТИЧЕН:
+        chatId: tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : "0", 
+        client: localStorage.getItem('company_name'),
+        username: "@" + (tg.initDataUnsafe.user.username || "unknown"),
+        material: document.getElementById('material').value,
+        options: opts.join(", "),
+        urgency: document.getElementById('urgency').value,
+        items: items
+    };
 
         fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) })
         .then(() => { 
